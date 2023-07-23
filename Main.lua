@@ -1,25 +1,54 @@
-local p = game:service'Players'
-local lp = p.LocalPlayer
+local wait = task.wait
+local players = game:GetService('Players')
+local networkclient = game:GetService('NetworkClient')
 
-function teleport(cf)
-    assert(typeof(cf) == "CFrame", "Invalid argument 'cf'. Expected CFrame.")
-    
-    local character = lp.Character
-    assert(character and character:FindFirstChild("HumanoidRootPart"), "Player character or HumanoidRootPart not found.")
-    
-    local dis = (character.HumanoidRootPart.Position - cf.Position).Magnitude
-    local backpack = lp.Backpack
-    
-    if dis >= 100 then
-        character.HumanoidRootPart.CFrame = CFrame.new(0, -50, 0)
-        task.wait(.5)
-        local tools = backpack:GetChildren()
-        assert(#tools > 0, "No tools found in the player's backpack.")
-        character.Humanoid:EquipTool(tools[1])
-        task.wait(.1)
-        character.HumanoidRootPart.CFrame = cf
-        character.Humanoid:UnequipTools()
-    else
-        character.HumanoidRootPart.CFrame = cf
+local function waitforclass(parent, class)
+    local object = parent:FindFirstChildWhichIsA(class)
+    while typeof(object) ~= 'Instance' do
+        object = parent:FindFirstChildWhichIsA(class)
+        wait()
+    end
+    return object
+end
+
+local function waitforprop(parent, prop)
+    local res = parent[prop]
+    while type(res) == 'nil' do
+        parent:GetPropertyChangedSignal(prop):Wait()
+        res = parent[prop]
+    end
+    return res
+end
+
+local clientreplicator = networkclient:WaitForChild('ClientReplicator')
+local localplayer = typeof(clientreplicator) == 'Instance' and clientreplicator:IsA('ClientReplicator') and clientreplicator:GetPlayer() or players.LocalPlayer
+local character, humanoid, rootpart, backpack
+
+local function loadcharacter()
+    character = localplayer.Character
+    humanoid = waitforclass(character, 'Humanoid')
+    rootpart = waitforprop(humanoid, 'RootPart')
+    backpack = waitforclass(localplayer, 'Backpack')
+end
+
+local function teleport(cf)
+    if typeof(rootpart) == 'Instance' then
+        local distance = (rootpart.Position - cf.Position).Magnitude
+        if distance >= 100 then
+            rootpart.CFrame = CFrame.new(0, -50, 0)
+            wait(.5)
+            local tool = backpack:GetChildren()[1]
+            if typeof(tool) == 'Instance' then
+                humanoid:EquipTool(tool)
+                wait(.1)
+                rootpart.CFrame = cf
+                humanoid:UnequipTools()
+            end
+        else
+            rootpart.CFrame = cf
+        end
     end
 end
+
+pcall(loadcharacter)
+localplayer.CharacterAdded:Connect(loadcharacter)
